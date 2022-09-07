@@ -2,9 +2,11 @@
 # ReweightingDisfluency
 This is the PyTorch implementation of the
 - COLING2022 paper [Adaptive Unsupervised Self-training for Disfluency Detection](http://www.baidu.com)
-
-
+<div align="center">
+    <image src='image/structure.jpg'>
+</div>
 All the code and model are released. Thank you for your patience!
+
 # About Model
 We release our self-supervised model trained by pseudo data and grammar check model. 
 Please download it in the following link, and put model in "./ckpt/teacher" and "./ckpt/judge " folder.
