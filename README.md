@@ -44,7 +44,7 @@ You need to put your data and model in the parallel folder of this repo:
 - tensorboardX
 
 # How to use
-
+The file path and training details can be set in the script `run.sh`
 ```shell
 nohup sh run.sh > log_run 2>&1 &
 ```
