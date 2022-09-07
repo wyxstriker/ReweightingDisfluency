@@ -11,9 +11,9 @@ All the code and model are released. Thank you for your patience!
 We release our self-supervised model trained by pseudo data and grammar check model. 
 Please download it in the following link, and put model in "./ckpt/teacher" and "./ckpt/judge " folder.
 
-- [teacher_model](http://www.baidu.com) in "./ckpt/teacher"
+- [teacher_model](https://drive.google.com/file/d/1UgqDcWo0gB4DpUCew2XJF848KYrLHTHx/view?usp=sharing) in "./ckpt/teacher"
 
-- [judge_model](http://www.baidu.com) in "./ckpt/judge"
+- [judge_model](https://drive.google.com/file/d/1A7tuE0PDKN8_1RSsl74uz5GQPkGFUKvA/view?usp=sharing) in "./ckpt/judge"
 
 You need to put your data and model in the parallel folder of this repo:
 ```text
