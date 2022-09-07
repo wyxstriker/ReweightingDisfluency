@@ -36,6 +36,8 @@ You need to put your data and model in the parallel folder of this repo:
         ...
     - run.sh
 ```
+# About data
+Due to copyright issues, we do not have the right to distribute SWBD datasets, which need to be purchased by ourselves.
 
 # Requirements
 - transformers==**4.7.0**
