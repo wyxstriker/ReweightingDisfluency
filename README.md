@@ -2,16 +2,18 @@
 # ReweightingDisfluency
 This is the PyTorch implementation of the
 - COLING2022 paper [Adaptive Unsupervised Self-training for Disfluency Detection](http://www.baidu.com)
-
-
+<div align="center">
+    <image src='image/structure.jpg'>
+</div>
 All the code and model are released. Thank you for your patience!
+
 # About Model
 We release our self-supervised model trained by pseudo data and grammar check model. 
 Please download it in the following link, and put model in "./ckpt/teacher" and "./ckpt/judge " folder.
 
-- [teacher_model](http://www.baidu.com) in "./ckpt/teacher"
+- [teacher_model](https://drive.google.com/file/d/1UgqDcWo0gB4DpUCew2XJF848KYrLHTHx/view?usp=sharing) in "./ckpt/teacher"
 
-- [judge_model](http://www.baidu.com) in "./ckpt/judge"
+- [judge_model](https://drive.google.com/file/d/1A7tuE0PDKN8_1RSsl74uz5GQPkGFUKvA/view?usp=sharing) in "./ckpt/judge"
 
 You need to put your data and model in the parallel folder of this repo:
 ```text
@@ -37,7 +39,7 @@ You need to put your data and model in the parallel folder of this repo:
     - run.sh
 ```
 # About data
-Due to copyright issues, we do not have the right to distribute SWBD datasets, which need to be purchased by ourselves.
+Due to copyright issues, we do not have the right to distribute the SWBD dataset and can purchase it for your own use.
 
 # Requirements
 - transformers==**4.7.0**
