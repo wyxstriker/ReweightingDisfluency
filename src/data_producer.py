@@ -1,9 +1,10 @@
 import logging
 from torch.utils.data import TensorDataset, DataLoader, RandomSampler, SequentialSampler
-from model import ElectraForSequenceDisfluency_real, ElectraForSequenceDisfluency_sing
+from modeling import ElectraForSequenceDisfluency_real, ElectraForSequenceDisfluency_sing
 import csv, os
 from transformers import ElectraConfig, BertTokenizer, AdamW
 import random, time
+import numpy as np
 
 class InputExample(object):
     '''data class'''
@@ -48,9 +49,6 @@ class DisfluencyProcessor(DataProcessor):
 
     def get_true_examples(self, data_dir, file_name):
         return self._create_true_examples(self._read_tsv(os.path.join(data_dir, file_name)))
-    
-    def get_single_from_pair_examples(self, data_dir, file_name):
-        return self._create_single_examples(self._read_tsv(os.path.join(data_dir, file_name)))
     
     def get_pair_examples(self, data_dir, file_name):
         return self._create_pair_examples(self._read_tsv(os.path.join(data_dir, file_name)))
@@ -138,19 +136,6 @@ class DisfluencyProcessor(DataProcessor):
                 InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label, disf_label=disf_label))
         return examples
     
-    def _create_single_examples(self, lines):
-        """Creates examples for the training and dev sets."""
-        examples = []
-        for (i, line) in enumerate(lines):
-            guid = line[0]
-            text_a = line[2]
-            text_b = 'NONE'
-            label = line[3]
-            disf_label = 'NONE'
-            examples.append(
-                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label, disf_label=disf_label))
-        return examples
-    
     def _create_true_examples(self, lines):
         """Creates examples for the training and dev sets."""
         examples = []
@@ -161,7 +146,7 @@ class DisfluencyProcessor(DataProcessor):
             try:
                 label = float(line[5])
             except:
-                label = 'true'
+                label = 'NONE'
             disf_label = line[4]
             
             text_a_fix = list()
@@ -189,7 +174,7 @@ class DisfluencyProcessor(DataProcessor):
             try:
                 label = float(line[5])
             except:
-                label = 'true'
+                label = 'NONE'
             disf_label = line[4]
             
             text_a_fix = list()
@@ -345,6 +330,71 @@ def convert_examples_to_features(examples, label_list, label_list_tagging, max_s
                           label_disf_id=disf_label_id))
     return features
 
+def convert_examples_to_features_soft(examples, label_list, label_list_tagging, max_seq_length, tokenizer):
+    """Loads a data file into a list of `InputBatch`s."""
+
+    label_map = {label: i for i, label in enumerate(label_list)}
+    label_tagging_map = {label: i for i, label in enumerate(label_list_tagging)}
+
+    features = []
+    for (ex_index, example) in enumerate(examples):
+        tokens_a = None
+        tokens_b = None
+        if example.text_b != "NONE":
+            tokens_a = tokenizer.tokenize(example.text_a)
+            tokens_b = tokenizer.tokenize(example.text_b)
+            _truncate_seq_pair(tokens_a, tokens_b, max_seq_length - 3)
+            
+        else:
+            label_disf_id = [float(x) for x in example.disf_label.split(' ')]
+            tokens_a, disf_label = random_word_no_prob(example.text_a, example.disf_label.strip().split(" "),
+                                                       label_disf_id, tokenizer)
+            if len(tokens_a) > max_seq_length - 2:
+                tokens_a = tokens_a[:(max_seq_length - 2)]
+                disf_label = disf_label[:(max_seq_length - 2)]
+
+
+        if tokens_b:
+            tokens = ["[CLS]"] + tokens_a + ["[SEP]"]
+            segment_ids = [0] * len(tokens)
+            tokens += tokens_b + ["[SEP]"]
+            segment_ids += [1] * (len(tokens_b) + 1)
+            label_id = label_map[example.label]
+            disf_label_id = [-1] * len(tokens)
+        else:
+            tokens = ["[CLS]"] + tokens_a + ["[SEP]"]
+            segment_ids = [0] * len(tokens)
+            label_id = example.label
+            disf_label_id = ([0] + disf_label + [0])
+
+        input_ids = tokenizer.convert_tokens_to_ids(tokens)
+
+        # The mask has 1 for real tokens and 0 for padding tokens. Only real
+        # tokens are attended to.
+        input_mask = [1] * len(input_ids)
+
+        # Zero-pad up to the sequence length.
+        padding = [0] * (max_seq_length - len(input_ids))
+        padding_disf = [0] * (max_seq_length - len(input_ids))
+        input_ids += padding
+        input_mask += padding
+        segment_ids += padding
+        disf_label_id += padding_disf
+
+        assert len(input_ids) == max_seq_length
+        assert len(input_mask) == max_seq_length
+        assert len(segment_ids) == max_seq_length
+        assert len(disf_label_id) == max_seq_length
+
+        features.append(
+            InputFeatures(input_ids=input_ids,
+                          input_mask=input_mask,
+                          segment_ids=segment_ids,
+                          label_id=label_id,
+                          label_disf_id=disf_label_id))
+    return features
+
+
 def accuracy_tagging(eval_examples, predict_result_tagging, gold_result_tagging, input_mask_tagging, output_name):
     output_file = open(output_name, "w")
     example_id = -1
@@ -406,7 +456,8 @@ def accuracy_tagging(eval_examples, predict_result_tagging, gold_result_tagging,
         f_score = 0
     return p_score, r_score, f_score
 
-def convert_examples_to_features_unlabel(examples, max_seq_length, tokenizer):
+def convert_examples_to_features_unlabel(examples, max_seq_length, tokenizer, sel_prob,
+                                 train_type="train"):
     """Loads a data file into a list of `InputBatch`s."""
 
     features = []
@@ -450,9 +501,9 @@ def convert_examples_to_features_unlabel(examples, max_seq_length, tokenizer):
 
 
 def unlabel_tagging(eval_examples, predict_result_tagging, gold_result_tagging, input_mask_tagging, output_name):
-    
     output_file = open(output_name, "w")
     example_id = -1
+    all_d_set = []
     assert len(predict_result_tagging) == len(input_mask_tagging)
     id = 1
     for i in range(0, len(predict_result_tagging)):
@@ -486,10 +537,67 @@ def unlabel_tagging(eval_examples, predict_result_tagging, gold_result_tagging, 
                     output_tokens.append(predict_label)
             
                 if output_tokens in output_set or not 'O' in output_tokens:
-                    pass
+                # if output_tokens in output_set:
+                    if not 'O' in output_tokens:
+                        all_d_set.append(id)
                 else:
                     output_set.append(output_tokens)
                     output_file.write(str(id)+"\t"+" ".join(text_a)+"\tNONE\tNONE\t"+" ".join(output_tokens) + "\n")
+            id += 1
+    output_file.close()
+    return all_d_set
+
+def soft_temp(values, temp):
+    # total_sum = sum(values)
+    max_v = max(values)
+    values -= max_v
+    values /= temp
+    values = np.exp(values)
+    values_sum = sum(values)
+    return values / values_sum * len(values)
+    # return values / values_sum * total_sum
+    
+
+def unlabel_soft(eval_examples, predict_result_soft, gold_result_tagging, input_mask_tagging, output_name, temp, all_d_set, do_temp=True):
+    output_file = open(output_name, "w")
+    example_id = -1
+    assert len(predict_result_soft) == len(input_mask_tagging)
+    id = 1
+    # each batch
+    for i in range(0, len(predict_result_soft)):
+        predict_results = predict_result_soft[i]
+        gold_results = gold_result_tagging[i]
+        input_masks = input_mask_tagging[i]
+        assert len(predict_results) == len(input_masks)
+        # each item
+        for j in range(0, len(predict_results)):
+            example_id += 1
+            text_a = eval_examples[example_id].text_a.strip().split(" ")
+            length = input_masks[j].count(1)
+
+            gold_result_tmp = gold_results[j][0:length]
+            predict_result_tmp = predict_results[j][0:length]
+            gold_result_tmp = gold_result_tmp[1:len(gold_result_tmp) - 1]
+            predict_result_tmp = predict_result_tmp[1:len(predict_result_tmp) - 1]
+            gold_result = []
+            predict_result = []
+            for k in range(0, len(gold_result_tmp)):
+                if gold_result_tmp[k] != -1:
+                    gold_result.append(gold_result_tmp[k])
+                    # before
+                    predict_result.append(predict_result_tmp[k])
+                    # after
+                    # predict_result.append(2*(predict_result_tmp[k]-0.5))
+
+            assert len(text_a) == len(predict_result)
+            if do_temp:
+                predict_result = soft_temp(predict_result, temp)
+            output_tokens = []
+
+            for l in range(0, len(text_a)):
+                output_tokens.append(str(predict_result[l]))
+            if id not in all_d_set:
+                output_file.write(str(id)+"\t"+" ".join(text_a)+"\tNONE\tNONE\t"+" ".join(output_tokens) + "\n")
             id += 1
     output_file.close()
 
@@ -535,9 +643,21 @@ def random_word(text1, label, label_map, tokenizer, sel_prob):
 
         for j in range(1, len(tokens)):
             orig_to_map_label.append(-1)
-    
+    # print(text1)
+    # print (len(orig_to_map_label))
+    # print (len(orig_to_map_token))
+    # try:
+    # global except_num
+    # if len(orig_to_map_label) != len(orig_to_map_token):
+    #     print(text1)
+    #     except_num += 1
+    #     if len(orig_to_map_token) > len(orig_to_map_label):
+    #         orig_to_map_token = orig_to_map_token[:len(orig_to_map_label)]
+    #     else:
+    #         orig_to_map_label = orig_to_map_label[:len(orig_to_map_token)]
     assert len(orig_to_map_label) == len(orig_to_map_token)
-
+    # except:
+    #     except_num +=1
     return orig_to_map_token, orig_to_map_label
 
 def convert_examples_to_features_judge(examples, label_list, label_list_tagging, label_sing_list, max_seq_length, tokenizer, train_type='eval'):
@@ -601,7 +721,7 @@ def convert_examples_to_features_judge(examples, label_list, label_list_tagging,
             segment_ids = [0] * len(tokens)
             label_id = -1
             disf_label_id = ([-1] + disf_label + [-1])
-            sing_label_id = label_sing_map[example.label]
+            sing_label_id = -1
 
         input_ids = tokenizer.convert_tokens_to_ids(tokens)
 

@@ -2,6 +2,7 @@ import torch.nn as nn
 from transformers.models.electra.modeling_electra import ElectraPreTrainedModel
 from transformers.models.electra.modeling_electra import ElectraModel
 from torch.nn import CrossEntropyLoss
+import torch
 
 
 class ElectraForSequenceDisfluency_real(ElectraPreTrainedModel):
@@ -15,7 +16,9 @@ class ElectraForSequenceDisfluency_real(ElectraPreTrainedModel):
         self.discriminator = ElectraModel(config)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.classifier_pair = nn.Linear(config.hidden_size, num_labels)
-        self.classifier_tagging = nn.Linear(config.hidden_size, num_labels_tagging)
+        self.classifier_tagging = nn.Linear(config.hidden_size, num_labels_tagging)  # pretrain on auto data
+        self.alpha = torch.nn.Parameter(torch.FloatTensor(1), requires_grad=True).to(self.device)
+        self.alpha.data.fill_(0.5)
         self.init_weights()
 
     def forward(
@@ -29,6 +32,35 @@ class ElectraForSequenceDisfluency_real(ElectraPreTrainedModel):
         labels=None,
         labels_tagging=None,
     ):
+        r"""
+        labels (:obj:`torch.LongTensor` of shape :obj:`(batch_size, sequence_length)`, `optional`, defaults to :obj:`None`):
+            Labels for computing the token classification loss.
+            Indices should be in ``[0, ..., config.num_labels - 1]``.
+    Returns:
+        :obj:`tuple(torch.FloatTensor)` comprising various elements depending on the configuration (:class:`~transformers.AlbertConfig`) and inputs:
+        loss (:obj:`torch.FloatTensor` of shape :obj:`(1,)`, `optional`, returned when ``labels`` is provided) :
+            Classification loss.
+        scores (:obj:`torch.FloatTensor` of shape :obj:`(batch_size, sequence_length, config.num_labels)`)
+            Classification scores (before SoftMax).
+        hidden_states (:obj:`tuple(torch.FloatTensor)`, `optional`, returned when ``config.output_hidden_states=True``):
+            Tuple of :obj:`torch.FloatTensor` (one for the output of the embeddings + one for the output of each layer)
+            of shape :obj:`(batch_size, sequence_length, hidden_size)`.
+            Hidden-states of the model at the output of each layer plus the initial embedding outputs.
+        attentions (:obj:`tuple(torch.FloatTensor)`, `optional`, returned when ``config.output_attentions=True``):
+            Tuple of :obj:`torch.FloatTensor` (one for each layer) of shape
+            :obj:`(batch_size, num_heads, sequence_length, sequence_length)`.
+            Attentions weights after the attention softmax, used to compute the weighted average in the self-attention
+            heads.
+    Examples::
+        from transformers import AlbertTokenizer, AlbertForTokenClassification
+        import torch
+        tokenizer = AlbertTokenizer.from_pretrained('albert-base-v2')
+        model = AlbertForTokenClassification.from_pretrained('albert-base-v2')
+        input_ids = torch.tensor(tokenizer.encode("Hello, my dog is cute", add_special_tokens=True)).unsqueeze(0)  # Batch size 1
+        labels = torch.tensor([1] * input_ids.size(1)).unsqueeze(0)  # Batch size 1
+        outputs = model(input_ids, labels=labels)
+        loss, scores = outputs[:2]
+        """
         discriminator_hidden_states = self.discriminator(
             input_ids, attention_mask, token_type_ids, position_ids, head_mask, inputs_embeds
         )
@@ -86,6 +118,35 @@ class ElectraForSequenceDisfluency_sing(ElectraPreTrainedModel):
         labels_sing=None,
         labels_lm=None,
     ):
+        r"""
+        labels (:obj:`torch.LongTensor` of shape :obj:`(batch_size, sequence_length)`, `optional`, defaults to :obj:`None`):
+            Labels for computing the token classification loss.
+            Indices should be in ``[0, ..., config.num_labels - 1]``.
+    Returns:
+        :obj:`tuple(torch.FloatTensor)` comprising various elements depending on the configuration (:class:`~transformers.AlbertConfig`) and inputs:
+        loss (:obj:`torch.FloatTensor` of shape :obj:`(1,)`, `optional`, returned when ``labels`` is provided) :
+            Classification loss.
+        scores (:obj:`torch.FloatTensor` of shape :obj:`(batch_size, sequence_length, config.num_labels)`)
+            Classification scores (before SoftMax).
+        hidden_states (:obj:`tuple(torch.FloatTensor)`, `optional`, returned when ``config.output_hidden_states=True``):
+            Tuple of :obj:`torch.FloatTensor` (one for the output of the embeddings + one for the output of each layer)
+            of shape :obj:`(batch_size, sequence_length, hidden_size)`.
+            Hidden-states of the model at the output of each layer plus the initial embedding outputs.
+        attentions (:obj:`tuple(torch.FloatTensor)`, `optional`, returned when ``config.output_attentions=True``):
+            Tuple of :obj:`torch.FloatTensor` (one for each layer) of shape
+            :obj:`(batch_size, num_heads, sequence_length, sequence_length)`.
+            Attentions weights after the attention softmax, used to compute the weighted average in the self-attention
+            heads.
+    Examples::
+        from transformers import AlbertTokenizer, AlbertForTokenClassification
+        import torch
+        tokenizer = AlbertTokenizer.from_pretrained('albert-base-v2')
+        model = AlbertForTokenClassification.from_pretrained('albert-base-v2')
+        input_ids = torch.tensor(tokenizer.encode("Hello, my dog is cute", add_special_tokens=True)).unsqueeze(0)  # Batch size 1
+        labels = torch.tensor([1] * input_ids.size(1)).unsqueeze(0)  # Batch size 1
+        outputs = model(input_ids, labels=labels)
+        loss, scores = outputs[:2]
+        """
         discriminator_hidden_states = self.discriminator(
             input_ids, attention_mask, token_type_ids, position_ids, head_mask, inputs_embeds
         )

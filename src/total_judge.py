@@ -1,5 +1,5 @@
 import logging
-from model import *
+from modeling import *
 from torch.nn import parameter
 from data_producer import *
 from torch.utils.data import TensorDataset, DataLoader, RandomSampler, SequentialSampler
@@ -41,7 +41,7 @@ class JudgeTrainer():
                 {'params': [p for n, p in param_optimizer if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}]
             self.optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
             self.loss_fct = torch.nn.CrossEntropyLoss(ignore_index=-1)
-            self.writer = SummaryWriter(args.log_dir)
+        self.writer = SummaryWriter(args.log_dir)
     
     @staticmethod
     def warmup_linear(x, warmup=0.002):
@@ -52,11 +52,11 @@ class JudgeTrainer():
     
     def train(self, args):
         train_examples = self.processor.get_examples(args.data_dir, 'train.tsv')
-        num_train_steps = int(len(train_examples) / args.batch_size / args.gradient_accumulation_steps * args.num_train_epochs)
+        num_train_steps = int(len(train_examples) / args.train_batch_size / args.gradient_accumulation_steps * args.num_train_epochs)
         train_features = convert_examples_to_features_judge(train_examples, self.label_sing_list, self.label_disf_list, self.label_sing_list, args.max_seq_length, self.tokenizer)
         logger.info("***** Running training *****")
         logger.info("  Num examples = %d", len(train_examples))
-        logger.info("  Batch size = %d", args.batch_size)
+        logger.info("  Batch size = %d", args.train_batch_size)
         logger.info("  Num steps = %d", num_train_steps)
         all_input_ids = torch.tensor([f.input_ids for f in train_features], dtype=torch.long)
         all_input_mask = torch.tensor([f.input_mask for f in train_features], dtype=torch.long)
@@ -70,12 +70,12 @@ class JudgeTrainer():
             train_sampler = RandomSampler(train_data)
         else:
             train_sampler = DistributedSampler(train_data)
-        train_dataloader = DataLoader(train_data, sampler=train_sampler, batch_size=args.batch_size)
+        train_dataloader = DataLoader(train_data, sampler=train_sampler, batch_size=args.train_batch_size)
         if args.local_rank == -1:
             train_sampler = RandomSampler(train_data)
         else:
             train_sampler = DistributedSampler(train_data)
-        train_dataloader = DataLoader(train_data, sampler=train_sampler, batch_size=args.batch_size)
+        train_dataloader = DataLoader(train_data, sampler=train_sampler, batch_size=args.train_batch_size)
         # training
         global_step = 0
         epoch_size = 0
@@ -84,7 +84,7 @@ class JudgeTrainer():
         for _ in trange(int(args.num_train_epochs), desc="Epoch"):
             logger.info("***** Running Training on TrainSet of epoch %d *****", epoch_size)
             logger.info("  Num examples = %d", len(train_examples))
-            logger.info("  Batch size = %d", args.batch_size)
+            logger.info("  Batch size = %d", args.train_batch_size)
             self.model.train()
             epoch_size += 1
             tr_loss = 0
@@ -134,7 +134,7 @@ class JudgeTrainer():
                 eval_features = convert_examples_to_features_judge(eval_examples, self.label_sing_list, self.label_disf_list, self.label_sing_list, args.max_seq_length, self.tokenizer)
                 logger.info("***** Running evaluation on dev of epoch %d *****", epoch_size)
                 logger.info("  Num examples = %d", len(eval_examples))
-                logger.info("  Batch size = %d", args.batch_size)
+                logger.info("  Batch size = %d", args.train_batch_size)
                 all_input_ids = torch.tensor([f.input_ids for f in eval_features], dtype=torch.long)
                 all_input_mask = torch.tensor([f.input_mask for f in eval_features], dtype=torch.long)
                 all_segment_ids = torch.tensor([f.segment_ids for f in eval_features], dtype=torch.long)
@@ -146,7 +146,7 @@ class JudgeTrainer():
                                           all_label_disf_ids, all_label_sing_ids)
                 # Run prediction for full data
                 eval_sampler = SequentialSampler(eval_data)
-                eval_dataloader = DataLoader(eval_data, sampler=eval_sampler, batch_size=args.batch_size)
+                eval_dataloader = DataLoader(eval_data, sampler=eval_sampler, batch_size=args.train_batch_size)
 
                 self.model.eval()
 
@@ -204,7 +204,7 @@ class JudgeTrainer():
                 eval_features = convert_examples_to_features_judge(eval_examples, self.label_sing_list, self.label_disf_list, self.label_sing_list, args.max_seq_length, self.tokenizer)
                 logger.info("***** Running evaluation on test %d*****", epoch_size)
                 logger.info("  Test Num examples = %d", len(eval_examples))
-                logger.info("  Test Batch size = %d", args.batch_size)
+                logger.info("  Test Batch size = %d", args.train_batch_size)
                 all_input_ids = torch.tensor([f.input_ids for f in eval_features], dtype=torch.long)
                 all_input_mask = torch.tensor([f.input_mask for f in eval_features], dtype=torch.long)
                 all_segment_ids = torch.tensor([f.segment_ids for f in eval_features], dtype=torch.long)
@@ -216,7 +216,7 @@ class JudgeTrainer():
                                           all_label_disf_ids, all_label_sing_ids)
                 # Run prediction for full data
                 eval_sampler = SequentialSampler(eval_data)
-                eval_dataloader = DataLoader(eval_data, sampler=eval_sampler, batch_size=args.batch_size)
+                eval_dataloader = DataLoader(eval_data, sampler=eval_sampler, batch_size=args.train_batch_size)
 
                 self.model.eval()
                 eval_loss, eval_accuracy = 0, 0
@@ -272,9 +272,9 @@ class JudgeTrainer():
         eval_origin_examples = self.processor.get_false_examples(args.data_dir, 'pseudo.tsv')
         eval_features = convert_examples_to_features_judge(eval_examples, self.label_sing_list, self.label_disf_list, self.label_sing_list, args.max_seq_length, self.tokenizer)
         # gpt_features = convert_examples_to_gpt_features(eval_examples, args.max_seq_length, tokenizerGPT2)
-        logger.info("***** Running judge on pseudo data *****")
+        logger.info("***** Running evaluation on dev of epoch *****")
         logger.info("  Num examples = %d", len(eval_examples))
-        logger.info("  Batch size = %d", args.batch_size)
+        logger.info("  Batch size = %d", args.train_batch_size)
         all_input_ids = torch.tensor([f.input_ids for f in eval_features], dtype=torch.long)
         all_input_mask = torch.tensor([f.input_mask for f in eval_features], dtype=torch.long)
         all_segment_ids = torch.tensor([f.segment_ids for f in eval_features], dtype=torch.long)
@@ -289,10 +289,10 @@ class JudgeTrainer():
         # gpt_data = TensorDataset(all_gpt_input_ids, all_gpt_input_mask)
         # Run prediction for full data
         eval_sampler = SequentialSampler(eval_data)
-        eval_dataloader = DataLoader(eval_data, sampler=eval_sampler, batch_size=args.batch_size)
+        eval_dataloader = DataLoader(eval_data, sampler=eval_sampler, batch_size=args.train_batch_size)
 
         # gpt_sampler = SequentialSampler(gpt_data)
-        # gpt_dataloader = DataLoader(gpt_data, sampler=gpt_sampler, batch_size=args.batch_size)
+        # gpt_dataloader = DataLoader(gpt_data, sampler=gpt_sampler, batch_size=args.train_batch_size)
 
         self.model.eval()
 
@@ -317,41 +317,38 @@ class JudgeTrainer():
                 logits_pair, logits_tagging, logits_sing = self.model(input_ids=input_ids, token_type_ids=segment_ids, attention_mask=input_mask)
 
             # &&&&
-            # logits_sing = F.softmax(logits_sing, dim=-1)
+            logits_sing = F.softmax(logits_sing, dim=-1)
             logits_sing = logits_sing.detach().cpu().numpy()
             logits_total.extend(logits_sing)
             input_ids_total.extend(input_ids.detach().cpu().numpy())
 
+        # with open(os.path.join(args.data_dir, "train.tsv"), 'w', encoding='utf8') as fw:
+        #     select_id = -1
+        #     select_score = -1
+        #     select_content = ''
+        #     for i in range(len(logits_total)):
+        #         # if logits_total[i][1] > args.thre:
+        #         # fw.write(str(eval_origin_examples[i].guid)+'\t'+eval_origin_examples[i].text_a.strip()+'\tNONE\tNONE\t'+eval_origin_examples[i].disf_label.strip()+'\t'+str(logits_total[i][1].item())+"\n")
+        #         now_id = eval_origin_examples[i].guid
+        #         now_score = logits_total[i][1].item()
+        #         if now_id != select_id:
+        #             if select_content != '':
+        #                 fw.write(select_content+'\n')
+        #             select_id = now_id
+        #             select_score = now_score
+        #             select_content = (str(eval_origin_examples[i].guid)+'\t'+eval_origin_examples[i].text_a.strip()+'\tNONE\tNONE\t'+eval_origin_examples[i].disf_label.strip()+'\t'+str(logits_total[i][1].item()))
+        #         elif now_score > select_score:
+        #             select_score = now_score
+        #             select_content = (str(eval_origin_examples[i].guid)+'\t'+eval_origin_examples[i].text_a.strip()+'\tNONE\tNONE\t'+eval_origin_examples[i].disf_label.strip()+'\t'+str(logits_total[i][1].item()))
+        #     if select_content != '':
+        #         fw.write(select_content+'\n')
+
         with open(os.path.join(args.data_dir, "train.tsv"), 'w', encoding='utf8') as fw:
-            select_id = -1
-            select_score = -1
-            select_content = ''
             for i in range(len(logits_total)):
-                # if logits_total[i][1] > args.thre:
-                # fw.write(str(eval_origin_examples[i].guid)+'\t'+eval_origin_examples[i].text_a.strip()+'\tNONE\tNONE\t'+eval_origin_examples[i].disf_label.strip()+'\t'+str(logits_total[i][1].item())+"\n")
-                now_id = eval_origin_examples[i].guid
-                # now_score = logits_total[i][1].item()
-                now_score = self.soft_temp(np.array([logits_total[i][0].item(), logits_total[i][1].item()]), args.temp)[1]
-                if now_id != select_id:
-                    if select_content != '' and now_score > args.thre:
-                        fw.write(select_content+'\n')
-                    select_id = now_id
-                    select_score = now_score
-                    select_content = (str(eval_origin_examples[i].guid)+'\t'+eval_origin_examples[i].text_a.strip()+'\tNONE\tNONE\t'+eval_origin_examples[i].disf_label.strip()+'\t'+str(now_score))
-                elif now_score > select_score:
-                    select_score = now_score
-                    select_content = (str(eval_origin_examples[i].guid)+'\t'+eval_origin_examples[i].text_a.strip()+'\tNONE\tNONE\t'+eval_origin_examples[i].disf_label.strip()+'\t'+str(now_score))
-            if select_content != '':
-                fw.write(select_content+'\n')
-
-    def soft_temp(self, values, temp):
-        max_v = max(values)
-        values -= max_v
-        values /= temp
-        values = np.exp(values)
-        values_sum = sum(values)
-        return values / values_sum
-
+                if logits_total[i][1] > args.thre:
+                # fw.write(t[i].strip()+'\t'+str(logits_total[i][1])+'\t'+str(gpt_total[i])+'\t'+str(gpt_n[i].item())+"\n")
+                    fw.write(str(eval_origin_examples[i].guid)+'\t'+eval_origin_examples[i].text_a.strip()+'\tNONE\tNONE\t'+eval_origin_examples[i].disf_label.strip()+'\t'+str(logits_total[i][1].item())+"\n")
+                        
     def _set_seed(self, seed, n_gpu):
         random.seed(seed)
         np.random.seed(seed)
@@ -408,10 +405,11 @@ if __name__ == '__main__':
     # required
     parser.add_argument('--data_dir', required=True, type=str)
     parser.add_argument('--output_dir', required=True, type=str)
+    parser.add_argument('--log_dir', required=True, type=str)
+    parser.add_argument("--bert_model", default=None, type=str, required=True)
     parser.add_argument("--pretrain_model_dir", default=None, type=str, required=True)
     parser.add_argument("--pretrain_model_name", default=None, type=str, required=True)
     ## Others
-    parser.add_argument('--log_dir', type=str)
     parser.add_argument("--max_seq_length", default=128, type=int)
     
     group1 = parser.add_mutually_exclusive_group()
@@ -426,8 +424,10 @@ if __name__ == '__main__':
     parser.add_argument("--do_lower_case", action='store_true')
     
     parser.add_argument("--task_name", default=None, type=str, required=True)
-    parser.add_argument("--batch_size", default=64, type=int)
+    parser.add_argument("--train_batch_size", default=64, type=int)
+    parser.add_argument("--eval_batch_size", default=128, type=int)
     parser.add_argument("--learning_rate", default=5e-5, type=float)
+    parser.add_argument("--sel_prob", default=0.5, type=float)
     parser.add_argument("--num_train_epochs", default=5, type=int)
     parser.add_argument("--warmup_proportion", default=0.1, type=float)
     parser.add_argument("--no_cuda", action='store_true')
@@ -438,11 +438,11 @@ if __name__ == '__main__':
     
     parser.add_argument('--gradient_accumulation_steps', type=int, default=1)
     parser.add_argument('--fp16', action='store_true')
+    parser.add_argument('--loss_scale', type=float, default=0)
 
     parser.add_argument("--model_name_or_path", default=None, type=str, required=True)
     parser.add_argument("--adam_epsilon", default=1e-8, type=float)
     parser.add_argument("--thre", default=0.5, type=float)
-    parser.add_argument("--temp", default=1, type=float)
 
     args = parser.parse_args()
 
