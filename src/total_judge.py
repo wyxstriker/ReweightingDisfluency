@@ -405,8 +405,8 @@ if __name__ == '__main__':
     # required
     parser.add_argument('--data_dir', required=True, type=str)
     parser.add_argument('--output_dir', required=True, type=str)
-    parser.add_argument('--log_dir', required=True, type=str)
-    parser.add_argument("--bert_model", default=None, type=str, required=True)
+    # parser.add_argument('--log_dir', required=True, type=str)
+    # parser.add_argument("--bert_model", default=None, type=str, required=True)
     parser.add_argument("--pretrain_model_dir", default=None, type=str, required=True)
     parser.add_argument("--pretrain_model_name", default=None, type=str, required=True)
     ## Others
