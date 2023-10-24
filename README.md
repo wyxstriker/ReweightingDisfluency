@@ -1,7 +1,7 @@
 
 # ReweightingDisfluency
 This is the PyTorch implementation of the
-- COLING2022 paper [Adaptive Unsupervised Self-training for Disfluency Detection](http://www.baidu.com)
+- COLING2022 paper [Adaptive Unsupervised Self-training for Disfluency Detection](https://aclanthology.org/2022.coling-1.632.pdf)
 <div align="center">
     <image src='image/structure.jpg'>
 </div>
