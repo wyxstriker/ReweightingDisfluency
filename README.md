@@ -54,6 +54,8 @@ nohup sh run.sh > log_run 2>&1 &
 ```
 
 # Citation
+If you find this project useful for your research, please consider citing the following paper:
+```
 @inproceedings{wang2022adaptive,
   title={Adaptive Unsupervised Self-training for Disfluency Detection},
   author={Wang, Zhongyuan and Wang, Yixuan and Wang, Shaolei and Che, Wanxiang},
@@ -61,6 +63,7 @@ nohup sh run.sh > log_run 2>&1 &
   pages={7209--7218},
   year={2022}
 }
+```
 
 # Contact
 If you have any question about this code, feel free to open an issue or contact yixuanwang@ir.hit.edu.cn.
